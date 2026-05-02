@@ -1,6 +1,5 @@
 import streamlit as st
 from PyPDF2 import PdfReader
-from ibm_watsonx_ai.foundation_models import ModelInference
 import os
 from dotenv import load_dotenv
 
@@ -27,23 +26,64 @@ st.markdown("""
 DEFAULT_API_KEY = os.getenv("IBM_API_KEY", "")
 DEFAULT_PROJECT_ID = os.getenv("IBM_PROJECT_ID", "")
 IBM_URL = os.getenv("IBM_URL", "https://us-south.ml.cloud.ibm.com")
+USE_DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
 
 with st.sidebar:
     st.title("🛡️ HATI Secure Control")
+    
+    if USE_DEMO_MODE:
+        st.warning("⚠️ Running in DEMO MODE")
+        st.info("Set DEMO_MODE=false in .env to use IBM Watson")
+    
     api_key = st.text_input("IBM Watson API Key", value=DEFAULT_API_KEY, type="password")
     project_id = st.text_input("IBM Project ID", value=DEFAULT_PROJECT_ID)
     st.info("Rotate keys regularly for security.")
 
 # FILE PROCESSING
 def extract_text(file):
-    if file.type == "application/pdf":
-        pdf = PdfReader(file)
-        return " ".join([page.extract_text() for page in pdf.pages])
-    return str(file.read(), "utf-8")
+    try:
+        if file.type == "application/pdf":
+            pdf = PdfReader(file)
+            return " ".join([page.extract_text() for page in pdf.pages])
+        return str(file.read(), "utf-8")
+    except Exception as e:
+        return f"Error extracting text: {str(e)}"
+
+# DEMO AUDIT (for testing without IBM Watson)
+def demo_audit(spec, impl):
+    return f"""### 🔍 Technical Drift Analysis (DEMO MODE)
+
+**Specification Summary:**
+- Length: {len(spec)} characters
+- First 200 chars: {spec[:200]}...
+
+**Implementation Summary:**
+- Length: {len(impl)} characters  
+- First 200 chars: {impl[:200]}...
+
+**Detected Issues:**
+1. ⚠️ Potential configuration drift detected
+2. ⚠️ Security parameter mismatch found
+3. ⚠️ Version inconsistency identified
+
+**Compliance Status:** ⚠️ REVIEW REQUIRED
+
+**Recommendations:**
+1. Verify authentication mechanisms match specification
+2. Review encryption settings
+3. Update documentation to reflect current state
+
+*Note: This is DEMO output. Connect IBM Watson for real AI analysis.*
+"""
 
 # AI AUDIT ENGINE
 def run_audit(spec, impl, api_key, project_id):
+    if USE_DEMO_MODE or not api_key or not project_id:
+        return demo_audit(spec, impl)
+    
     try:
+        from ibm_watsonx_ai.foundation_models import ModelInference
+        
         credentials = {"url": IBM_URL, "apikey": api_key}
         
         model = ModelInference(
@@ -73,7 +113,9 @@ Provide:
         
         return model.generate_text(prompt=prompt)
     except Exception as e:
-        return f"Error: {str(e)}\n\nPlease verify your IBM Watson credentials and project ID are correct."
+        st.error(f"IBM Watson Error: {str(e)}")
+        st.info("Falling back to DEMO mode...")
+        return demo_audit(spec, impl)
 
 # DASHBOARD
 st.title("🛡️ HATI AI - Agentic Technical Drift Auditor")
@@ -90,18 +132,20 @@ with col2:
     impl_file = st.file_uploader("Upload Implementation Doc", type=['pdf', 'txt'], key="impl")
 
 if st.button("🚀 EXECUTE AUDIT", use_container_width=True):
-    if not api_key or not project_id:
-        st.error("⚠️ Missing IBM Watson credentials!")
-    elif not spec_file or not impl_file:
+    if not spec_file or not impl_file:
         st.error("⚠️ Please upload both documents!")
     else:
         with st.spinner("🔍 HATI AI is analyzing for technical drift..."):
             spec_text = extract_text(spec_file)
             impl_text = extract_text(impl_file)
-            results = run_audit(spec_text, impl_text, api_key, project_id)
             
-            st.success("✅ Audit Complete!")
-            st.markdown("### 📊 Audit Findings")
-            st.markdown(results)
+            if "Error" in spec_text or "Error" in impl_text:
+                st.error("Failed to extract text from files. Please check file format.")
+            else:
+                results = run_audit(spec_text, impl_text, api_key, project_id)
+                
+                st.success("✅ Audit Complete!")
+                st.markdown("### 📊 Audit Findings")
+                st.markdown(results)
 
 # Made with Bob
