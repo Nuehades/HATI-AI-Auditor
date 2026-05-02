@@ -1,5 +1,7 @@
 # HATI AI - Agentic Technical Drift Auditor
 
+Hati AI auditor is an agentic AI that verifies security documents for technical drifts.
+
 ## 🏗️ System Architecture
 
 This application acts as an **integrator and system architect** for AI-powered technical auditing:
