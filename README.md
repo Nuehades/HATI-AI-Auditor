@@ -1,4 +1,4 @@
-# HATI AI - Agentic Technical Drift Auditor
+# HATI AI - Agentic AI Auditor
 
 Hati AI auditor is an agentic AI that verifies security documents for technical drifts.
 
