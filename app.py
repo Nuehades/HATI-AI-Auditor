@@ -7,37 +7,26 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # UI SETUP
-st.set_page_config(page_title="HATI AI | Technical Drift Auditor", layout="wide")
+st.set_page_config(page_title="HATI AI | Auditor", layout="wide")
 
 # Custom CSS
 st.markdown("""
 <style>
 .stAlert { border-left: 5px solid #0062ff; }
-.stButton>button { 
-    background-color: #0062ff; 
-    color: white; 
-    border-radius: 8px; 
-    font-weight: bold; 
+.stButton>button {
+    background-color: #0062ff;
+    color: white;
+    border-radius: 8px;
+    font-weight: bold;
 }
 </style>
 """, unsafe_allow_html=True)
 
-# CREDENTIALS
-DEFAULT_API_KEY = os.getenv("IBM_API_KEY", "")
-DEFAULT_PROJECT_ID = os.getenv("IBM_PROJECT_ID", "")
+# CREDENTIALS - Load from environment variables only
+API_KEY = os.getenv("IBM_API_KEY", "")
+PROJECT_ID = os.getenv("IBM_PROJECT_ID", "")
 IBM_URL = os.getenv("IBM_URL", "https://us-south.ml.cloud.ibm.com")
 USE_DEMO_MODE = os.getenv("DEMO_MODE", "true").lower() == "true"
-
-with st.sidebar:
-    st.title("🛡️ HATI Secure Control")
-    
-    if USE_DEMO_MODE:
-        st.warning("⚠️ Running in DEMO MODE")
-        st.info("Set DEMO_MODE=false in .env to use IBM Watson")
-    
-    api_key = st.text_input("IBM Watson API Key", value=DEFAULT_API_KEY, type="password")
-    project_id = st.text_input("IBM Project ID", value=DEFAULT_PROJECT_ID)
-    st.info("Rotate keys regularly for security.")
 
 # FILE PROCESSING
 def extract_text(file):
@@ -77,24 +66,26 @@ def demo_audit(spec, impl):
 """
 
 # AI AUDIT ENGINE
-def run_audit(spec, impl, api_key, project_id):
-    if USE_DEMO_MODE or not api_key or not project_id:
+def run_audit(spec, impl):
+    if USE_DEMO_MODE or not API_KEY or not PROJECT_ID:
         return demo_audit(spec, impl)
     
     try:
-        from ibm_watsonx_ai.foundation_models import ModelInference
+        from ibm_watsonx_ai.foundation_models import Model
         
-        credentials = {"url": IBM_URL, "apikey": api_key}
+        credentials = {"url": IBM_URL, "apikey": API_KEY}
         
-        model = ModelInference(
+        parameters = {
+            "decoding_method": "greedy",
+            "max_new_tokens": int(os.getenv("MAX_TOKENS", "1000")),
+            "temperature": 0.2
+        }
+        
+        model = Model(
             model_id=os.getenv("MODEL_ID", "ibm/granite-13b-instruct-v2"),
-            params={
-                "decoding_method": "greedy",
-                "max_new_tokens": int(os.getenv("MAX_TOKENS", "1000")),
-                "temperature": 0.2
-            },
+            params=parameters,
             credentials=credentials,
-            project_id=project_id
+            project_id=PROJECT_ID
         )
         
         prompt = f"""[Role: Senior Cybersecurity Auditor]
@@ -121,6 +112,14 @@ Provide:
 st.title("🛡️ HATI AI - Agentic Technical Drift Auditor")
 st.write("Upload technical documents to verify compliance and detect security drift.")
 
+# Display mode indicator
+if USE_DEMO_MODE:
+    st.info("ℹ️ Running in DEMO MODE. Set DEMO_MODE=false in .env to use IBM watsonx.ai")
+elif not API_KEY or not PROJECT_ID:
+    st.warning("⚠️ IBM credentials not configured. Please set IBM_API_KEY and IBM_PROJECT_ID in .env file")
+else:
+    st.success("✅ Connected to IBM watsonx.ai")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -142,7 +141,7 @@ if st.button("🚀 EXECUTE AUDIT", use_container_width=True):
             if "Error" in spec_text or "Error" in impl_text:
                 st.error("Failed to extract text from files. Please check file format.")
             else:
-                results = run_audit(spec_text, impl_text, api_key, project_id)
+                results = run_audit(spec_text, impl_text)
                 
                 st.success("✅ Audit Complete!")
                 st.markdown("### 📊 Audit Findings")
